@@ -1,12 +1,18 @@
+-- Universal Pat 1.0 by ChloeSpacedOut
+
 --#REGION Config
 
 local config = {
 
+    -- Pat delay between pats when holding the pat button, in ticks.
     patDelay = 3,
+
+    -- If patting non-living entites is enabled.
     patNonLivingEntites = false,
 
     -- Whitelisted players will be allowed to pat you if you set doWhitelist to true.
     doWhitelist = false,
+    doWhitelistOnSkull = false,
     whitelist = {
         -- example whitelisted players
         -- copy UUID in the figura trust menu or on nameMC
@@ -69,36 +75,56 @@ local config = {
 
 }
 
--- USER DEFINED PAT FUNCTION
+-- USER DEFINED PAT FUNCTION.
+---@param senderId string The unique ID of the sender.
 function config.onPat(senderId)
+    
+    local heartSpread = 0.5
+    local particle = "minecraft:heart"
+
     local pos = player:getPos()
-    particles:newParticle("minecraft:heart", pos + vec(0, player:getEyeHeight() + .2, 0))
+    local randomHeartOffset = vec((math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread)
+    particles:newParticle(particle, pos + vec(0, player:getEyeHeight(), 0) + randomHeartOffset)
 end
 
--- USER DEFINED PAT FUNCTION
+-- USER DEFINED PAT FUNCTION FOR HEADS.
+---@param senderId string The unique ID of the sender.
+---@param pos Vector3 The position of the head.
 function config.onPatSkull(senderId, pos)
-    particles:newParticle("minecraft:heart", pos + vec(0.5, 0.7, 0.5))
+
+    local heartSpread = 0.4
+    local particle = "minecraft:heart"
+
+    local randomHeartOffset = vec((math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread)
+    particles:newParticle(particle, pos + vec(0.5, 0.5, 0.5) + randomHeartOffset)
 end
 
--- USER DEFINED PAT FUNCTION FOR ENTITYS IN THE WORLD
----comment
+-- USER DEFINED PAT FUNCTION FOR ENTITYS IN THE WORLD.
 ---@param entity Entity
 function config.onEntityPat(entity)
+
+    local heartSpread = 0.5
+    local particle = "minecraft:heart"
+    local playEntitySounds = true
+
     local pos = entity:getPos()
-    particles:newParticle("minecraft:heart", pos + vec(0, entity:getEyeHeight() + .2, 0))
+    local randomHeartOffset = vec((math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread)
+    particles:newParticle(particle, pos + vec(0, entity:getEyeHeight(), 0) + randomHeartOffset)
     
-    local entityName = string.lower(entity:getName()):gsub(" ", "_")
-    local variant = entity:getNbt().sound_variant
-    local pitch = entity:getNbt().Age == -1 and 1.5 or 1
-    if variant and variant ~= "minecraft:classic" then
-        entityName = entityName .. "_" .. string.match(variant, ":(.*)")
+    if playEntitySounds then
+        local entityName = string.lower(entity:getName()):gsub(" ", "_")
+        local variant = entity:getNbt().sound_variant
+        local pitch = entity:getNbt().Age == -1 and 1.5 or 1
+        if variant and variant ~= "minecraft:classic" then
+            entityName = entityName .. "_" .. string.match(variant, ":(.*)")
+        end
+        sounds:playSound("minecraft:entity." .. entityName .. ".ambient", entity:getPos(), .5, pitch)
     end
-    sounds:playSound("minecraft:entity." .. entityName .. ".ambient", entity:getPos(), .5, pitch)
 end
 
 --#ENDREGION
 
--- !Do not edit the script beyond this point unless you know what you're doing!!!
+-- Do not edit the script beyond this point unless you know what you're doing!!! --
 
 --#REGION Enums
 
@@ -141,7 +167,7 @@ end
 
 ---Safely pcall a function. Discovered by Bitslayn.
 ---@param func function The function to be safe pcalled.
----@param override boolean If this pcall should be ignored. For debugging.
+---@param override boolean? If this pcall should be ignored. For debugging.
 ---@return boolean hasErrored If the function errored in the pcall.
 local function safePcall(func, override)
     if override then
@@ -160,6 +186,8 @@ end
 
 local isPatting = nil
 local punchingPlayers = {}
+
+---@type Pat[]
 local patQueue = {}
 
 --#REGION Pat Object
@@ -215,9 +243,19 @@ end
 
 --#REGION DoPat
 
----Attempt a pat
+---Attempt a pat.
 ---@param target string | Vector3 The target being pet. Either an entity UUID or a block position.
 local function doPat(target)
+    local target = target
+    local worldTime = world.getTime()
+    local mostRecentPat = patQueue[#patQueue]
+
+    if mostRecentPat and mostRecentPat.queueTime then
+        if worldTime < mostRecentPat.queueTime + 2 then
+            return
+        end
+    end
+
     local senderId = avatar:getUUID()
     if type(target) == "string" then
         local entity = world.getEntity(target)
@@ -236,7 +274,7 @@ local function doPat(target)
                 host:swingArm()
                 isPatting = target
             end
-        end, true)
+        end)
     elseif type(target) == "Vector3" then
         local targetBlock = world.getBlockState(target)
         local blockData = targetBlock:getEntityData()
@@ -254,7 +292,7 @@ local function doPat(target)
                 host:swingArm()
                 isPatting = target
             end
-        end, true)
+        end)
     end
 end
 
@@ -301,7 +339,6 @@ end
 ---@param skullPos Vector3? The position of the skull if it exists.
 ---@return boolean isValidPat If this pat was valid.
 local function patValidator(senderId, skullPos)
-    if config.doWhitelist and (not config.whitelist[senderId]) then return false end
     if config.blacklist[senderId] then return false end
 
     local skull
@@ -335,6 +372,7 @@ local function patValidator(senderId, skullPos)
     local pattingPlayerPos = pattingPlayer:getPos()
 
     if skull then
+        if config.doWhitelistOnSkull and (not config.whitelist[senderId]) then return false end
         local pos = skull:getPos()
         local distance = (pattingPlayerPos - pos):length()
         if distance > 5 then return false end
@@ -348,6 +386,7 @@ local function patValidator(senderId, skullPos)
         local ownerId = client.intUUIDToString(table.unpack(blockData.SkullOwner.Id))
         if not ownerId == avatar:getUUID() then return false end
     elseif player:isLoaded() then
+        if config.doWhitelist and (not config.whitelist[senderId]) then return false end
         local pos = player:getPos()
         local distance = (pattingPlayerPos - pos):length()
         if distance > 5 then return false end
