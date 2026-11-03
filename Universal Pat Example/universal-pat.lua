@@ -1,3 +1,5 @@
+--#REGION Config
+
 local config = {
 
     patDelay = 3,
@@ -51,8 +53,6 @@ local config = {
         mustPressAllAdditionalKeys = true,
     },
 
-
-
     -- Config for self pat, useful in debugging your own pat function.
     selfPatControls = {
         -- Which additional keys must be pressed to self pat.
@@ -66,7 +66,6 @@ local config = {
         -- If all specified additional keys must be pressed to self pat.
         mustPressAllAdditionalKeys = true,
     }
-
 
 }
 
@@ -96,6 +95,12 @@ function config.onEntityPat(entity)
     end
     sounds:playSound("minecraft:entity." .. entityName .. ".ambient", entity:getPos(), .5, pitch)
 end
+
+--#ENDREGION
+
+-- !Do not edit the script beyond this point unless you know what you're doing!!!
+
+--#REGION Enums
 
 local enums = {
     mouseButtons = {
@@ -130,29 +135,49 @@ for i = 0, 15 do
     enums.superModifiers[i] = math.floor(i/8) % 2 == 1
 end
 
-local isPatting = nil
+--#ENDREGION
 
+--#REGION Pat Handler
+
+---Safely pcall a function. Discovered by Bitslayn.
+---@param func function The function to be safe pcalled.
+---@param override boolean If this pcall should be ignored. For debugging.
+---@return boolean hasErrored If the function errored in the pcall.
 local function safePcall(func, override)
     if override then
         func()
         return true
     end
     local v = vec(1, 2)
-    local ok = pcall(v.applyFunc, v, function(i)
+    local hasErrored = pcall(v.applyFunc, v, function(i)
         if i == 1 then
             func()
         end
         return i
     end)
-    return ok
+    return hasErrored
 end
 
+local isPatting = nil
 local punchingPlayers = {}
 local patQueue = {}
 
+--#REGION Pat Object
+
+---A pat object.
+---@class Pat
+---@field senderId string The unique ID of the pat sender.
+---@field sender Entity The player who intiated the pat.
+---@field pos Vector3? If this pat is for a head, the position of the head.
+---@field queueTime integer The world time when this pat was first created.
+---@field id integer The numeric ID of this pat.
 local pat = {}
 pat.__index = pat
 
+---Creates a new pat.
+---@param senderId string The unique ID of the pat sender.
+---@param pos Vector3? If this pat is for a head, the position of the head.
+---@return Pat
 function pat:new(senderId, pos)
     self = setmetatable({}, pat)
     self.senderId = senderId
@@ -161,8 +186,10 @@ function pat:new(senderId, pos)
     self.queueTime = world.getTime()
     self.id = #patQueue + 1
     table.insert(patQueue, self)
+    return self
 end
 
+---Checks if this pat should be activated or removed.
 function pat:check()
     if punchingPlayers[self.senderId] then
         punchingPlayers[self.senderId] = nil
@@ -179,10 +206,17 @@ function pat:check()
     end
 end
 
+---Removes this pat.
 function pat:remove()
     patQueue[self.id] = nil
 end
 
+--#ENDREGION
+
+--#REGION DoPat
+
+---Attempt a pat
+---@param target string | Vector3 The target being pet. Either an entity UUID or a block position.
 local function doPat(target)
     local senderId = avatar:getUUID()
     if type(target) == "string" then
@@ -222,10 +256,13 @@ local function doPat(target)
             end
         end, true)
     end
-
-
 end
 
+--#ENDREGION
+
+--#REGION Tick
+
+---@diagnostic disable-next-line: duplicate-set-field
 function events.tick()
     for _, targetPlayer in pairs(world:getPlayers()) do
         local playerId = targetPlayer:getUUID()
@@ -255,9 +292,14 @@ function events.tick()
     end
 end
 
-local patpat = {}
+--#ENDREGION
 
+--#REGION Pat Validator
 
+---Validates if a pat is from the intended sender.
+---@param senderId string The unique ID of the sender.
+---@param skullPos Vector3? The position of the skull if it exists.
+---@return boolean isValidPat If this pat was valid.
 local function patValidator(senderId, skullPos)
     if config.doWhitelist and (not config.whitelist[senderId]) then return false end
     if config.blacklist[senderId] then return false end
@@ -320,6 +362,43 @@ local function patValidator(senderId, skullPos)
     return true
 end
 
+--#ENDREGION
+
+--#REGION Pings
+
+---@diagnostic disable-next-line: duplicate-set-field
+function pings.patpat(targetId)
+    doPat(targetId)
+end
+
+---@diagnostic disable-next-line: duplicate-set-field
+function pings.patHead(pos)
+    doPat(pos)
+end
+
+---@diagnostic disable-next-line: duplicate-set-field
+function pings.selfPat()
+    local uuid = avatar:getUUID()
+    config.onPat(uuid)
+    host:swingArm()
+end
+
+---@diagnostic disable-next-line: duplicate-set-field
+function pings.unpat()
+    isPatting = false
+end
+
+--#ENDREGION
+
+--#ENDREGION
+
+--#REGION Pat Functions
+
+local patpat = {}
+
+---Try to pat a player.
+---@param senderId string The unique ID of the sender.
+---@return boolean wasSuccessful If this pat was successful.
 function patpat.player(senderId)
     local isAllowed = patValidator(senderId)
     if not isAllowed then return false end
@@ -327,6 +406,12 @@ function patpat.player(senderId)
     return true
 end
 
+---Try to pat a player head.
+---@param senderId string The unique ID of the sender.
+---@param x number X position of the player head.
+---@param y number Y position of the player head.
+---@param z number Z position of the player head.
+---@return boolean wasSuccessful If this pat was successful.
 function patpat.skull(senderId, x, y, z)
     local pos = vec(x, y ,z)
     local isAllowed = patValidator(senderId, pos)
@@ -335,27 +420,19 @@ function patpat.skull(senderId, x, y, z)
     return true
 end
 
-
 avatar:store("patpat", patpat)
 
-function pings.patpat(targetId)
-    doPat(targetId)
-end
+--#ENDREGION
 
-function pings.patHead(pos)
-    doPat(pos)
-end
+--#REGION Pat Controller
 
-function pings.selfPat()
-    local uuid = avatar:getUUID()
-    config.onPat(uuid)
-    host:swingArm()
-end
-
-function pings.unpat()
-    isPatting = false
-end
-
+---Check if a modifyer key is pressed, and return if any or all keys have been pressed.
+---@param modKeyUsed boolean If this mod key is configured to be used.
+---@param modKeyPressed boolean If this mod key is being pressed.
+---@param isPressed boolean If any key is being pressed.
+---@param areAllPressed boolean If all keys are being pressed.
+---@return boolean isPressed If any key is being pressed.
+---@return boolean areAllPressed If all keys are being pressed.
 local function validateModifier(modKeyUsed, modKeyPressed, isPressed, areAllPressed)
     if modKeyUsed and modKeyPressed then
         return true, areAllPressed
@@ -366,6 +443,10 @@ local function validateModifier(modKeyUsed, modKeyPressed, isPressed, areAllPres
     end
 end
 
+---Validate if modifer keys are pressed.
+---@param modifiers integer The numeric id of pressed modifer keys.
+---@param keyConfig table The config of these modifer keys.
+---@return boolean
 local function validateAllModifiers(modifiers, keyConfig)
     local additionalKeys = keyConfig.additionalKeys
     local isPressed = false
@@ -383,6 +464,7 @@ local function validateAllModifiers(modifiers, keyConfig)
 end
 
 
+---@diagnostic disable-next-line: duplicate-set-field
 function events.mouse_press(button, state, modifiers)
     local isModKey = validateAllModifiers(modifiers, config.patControls) or (not config.patControls.requiredAdditionalKeys)
     local isSelfPatModKey = validateAllModifiers(modifiers, config.selfPatControls)
@@ -423,6 +505,6 @@ function events.mouse_press(button, state, modifiers)
             pings.unpat()
         end
     end
-
-
 end
+
+--#ENDREGION
