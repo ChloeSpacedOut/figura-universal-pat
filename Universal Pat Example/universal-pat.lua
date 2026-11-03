@@ -4,12 +4,14 @@ local config = {
     patNonLivingEntites = false,
 
     -- Whitelisted players will be allowed to pat you if you set doWhitelist to true.
+    doWhitelist = false,
     whitelist = {
         -- example whitelisted players
         -- copy UUID in the figura trust menu or on nameMC
         ["8667ba71-b85a-4004-af54-457a9734eed7"] = true, -- Steve
         ["ec561538-f3fd-461d-aff5-086b22154bce"] = true, -- Alex
     },
+
     -- Blacklisted players will not be able to pat you.
     blacklist = {
         -- example blacklisted players
@@ -18,37 +20,53 @@ local config = {
         ["069a79f4-44e9-4726-a5be-fca90e38aaf5"] = true, -- Notch
     },
 
-    -- If players must be whitelisted to pat you.
-    doWhitelist = false,
-
     -- Disables pats from EVERYONE if a blacklisted player is within specified number of blocks. Set to -1 for unlimited range, set to 0 to disable.
     blacklistDisableDistance = 0,
 
-    -- Which mouse buttons can be used to pat.
-    patMouseButtons = {
-        patOnMouseLeft = false,
-        patOnMouseRight = true,
-        patOnMouseMiddle = false,
-        patOnMouseBack = false,
-        patOnMouseForward = false,
-        patOnMouse6 = false,
-        patOnMouse7 = false,
-        patOnMouse8 = false,
+    patControls = {
+        -- Which mouse buttons can be used to pat.
+        mouseButtons = {
+            patOnMouseLeft = false,
+            patOnMouseRight = true,
+            patOnMouseMiddle = false,
+            patOnMouseBack = false,
+            patOnMouseForward = false,
+            patOnMouse6 = false,
+            patOnMouse7 = false,
+            patOnMouse8 = false,
+        },
+
+        -- Which additional keys must be pressed to pat.
+        additionalKeys = {
+            patOnShift = true,
+            patOnCtrl = false,
+            patOnAlt = false,
+            patOnSuper = false,
+        },
+
+        -- If an additional key must be pressed to pat.
+        requiredAdditionalKeys = true,
+
+        -- If all specified additional keys must be pressed to pat.
+        mustPressAllAdditionalKeys = true,
     },
 
-    -- Which additional keys must be pressed to pat.
-    patAdditionalKeys = {
-        patOnShift = true,
-        patOnCtrl = false,
-        patOnAlt = false,
-        patOnSuper = false,
-    },
 
-    -- If an additional key must be pressed to pat.
-    requiredAdditionalKeys = true,
 
-    -- If all specified additional keys must be pressed to pat.
-    mustPressAllAdditionalKeys = true,
+    -- Config for self pat, useful in debugging your own pat function.
+    selfPatControls = {
+        -- Which additional keys must be pressed to self pat.
+        additionalKeys = {
+            patOnShift = false,
+            patOnCtrl = true,
+            patOnAlt = true,
+            patOnSuper = false,
+        },
+
+        -- If all specified additional keys must be pressed to self pat.
+        mustPressAllAdditionalKeys = true,
+    }
+
 
 }
 
@@ -112,7 +130,7 @@ for i = 0, 15 do
     enums.superModifiers[i] = math.floor(i/8) % 2 == 1
 end
 
-local isPatting = false
+local isPatting = nil
 
 local function safePcall(func, override)
     if override then
@@ -328,6 +346,12 @@ function pings.patHead(pos)
     doPat(pos)
 end
 
+function pings.selfPat()
+    local uuid = avatar:getUUID()
+    config.onPat(uuid)
+    host:swingArm()
+end
+
 function pings.unpat()
     isPatting = false
 end
@@ -342,16 +366,16 @@ local function validateModifier(modKeyUsed, modKeyPressed, isPressed, areAllPres
     end
 end
 
-local function validateAllModifiers(modifiers)
+local function validateAllModifiers(modifiers, keyConfig)
+    local additionalKeys = keyConfig.additionalKeys
     local isPressed = false
     local areAllPressed = true
-    local keyConfig = config.patAdditionalKeys
-    isPressed, areAllPressed = validateModifier(keyConfig.patOnShift, enums.shiftModifiers[modifiers], isPressed, areAllPressed)
-    isPressed, areAllPressed = validateModifier(keyConfig.patOnCtrl, enums.ctrlModifiers[modifiers], isPressed, areAllPressed)
-    isPressed, areAllPressed = validateModifier(keyConfig.patOnAlt, enums.altModifiers[modifiers], isPressed, areAllPressed)
-    isPressed, areAllPressed = validateModifier(keyConfig.patOnSuper, enums.superModifiers[modifiers], isPressed, areAllPressed)
+    isPressed, areAllPressed = validateModifier(additionalKeys.patOnShift, enums.shiftModifiers[modifiers], isPressed, areAllPressed)
+    isPressed, areAllPressed = validateModifier(additionalKeys.patOnCtrl, enums.ctrlModifiers[modifiers], isPressed, areAllPressed)
+    isPressed, areAllPressed = validateModifier(additionalKeys.patOnAlt, enums.altModifiers[modifiers], isPressed, areAllPressed)
+    isPressed, areAllPressed = validateModifier(additionalKeys.patOnSuper, enums.superModifiers[modifiers], isPressed, areAllPressed)
 
-    if config.mustPressAllAdditionalKeys then
+    if keyConfig.mustPressAllAdditionalKeys then
         return areAllPressed
     else
         return isPressed
@@ -360,18 +384,16 @@ end
 
 
 function events.mouse_press(button, state, modifiers)
-    local isModKey = validateAllModifiers(modifiers) or (not config.requiredAdditionalKeys)
-    local isMouseButton = config.patMouseButtons[enums.mouseButtons[button]]
+    local isModKey = validateAllModifiers(modifiers, config.patControls) or (not config.patControls.requiredAdditionalKeys)
+    local isSelfPatModKey = validateAllModifiers(modifiers, config.selfPatControls)
+    local isMouseButton = config.patControls.mouseButtons[enums.mouseButtons[button]]
     local isMouseState = state == 1
-    local toPat = isModKey and isMouseButton
-
-    if isMouseState and toPat then
+    if isMouseState and isModKey and isMouseButton then
         local targetEntity = player:getTargetedEntity(5)
         local targetBlock = player:getTargetedBlock(true, 5)
-        
         if targetEntity then
             local targetId = targetEntity:getUUID()
-            if not targetEntity:isPlayer() and (config.patNonLivingEntites == targetEntity:isAlive()) then
+            if not targetEntity:isPlayer() and (config.patNonLivingEntites or targetEntity:isLiving()) then
                 pings.patpat(targetId)
                 return true
             end
@@ -394,6 +416,8 @@ function events.mouse_press(button, state, modifiers)
             pings.patpat(targetBlock:getPos())
             return true
         end
+    elseif isSelfPatModKey and isMouseButton and isMouseState then
+        pings.selfPat()
     elseif (not isMouseState) and isMouseButton then
         if isPatting then
             pings.unpat()
