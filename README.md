@@ -34,6 +34,7 @@ Universal pat does not use uncrackable UUID auth, and instead relies on context 
 - that this player is within 5 blocks of you / your skull
 - that this player is looking at you / your skull
 - that this player has swung their arm to pat you
+
 These checks do not guarantee that your whitelist / blacklist will not be cracked with UUID spoofing, but make it extremely unplausable. To crack this security, a malicious actor would need:
 - a whitelisted player to be within 5 blocks of you
 - a whitelisted player to be looking at you
