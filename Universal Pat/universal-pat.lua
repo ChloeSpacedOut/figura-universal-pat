@@ -75,7 +75,7 @@ local config = {
 
 }
 
--- USER DEFINED PAT FUNCTION.
+-- Runs when you are pet. Modify to customise how you are pet!
 ---@param senderId string The unique ID of the sender.
 function config.onPat(senderId)
     local heartSpread = 0.5
@@ -88,7 +88,7 @@ function config.onPat(senderId)
     petParticle:scale(particleScale)
 end
 
--- Lookup table for skup patting, feel free to remove if you don't use this.
+-- Lookup table for skull patting. Don't remove unless you know what you're doing.
 local wallHeadLookup = {
     north = vec(0, 0.25, 0.25),
     east = vec(-0.25, 0.25, 0),
@@ -96,7 +96,7 @@ local wallHeadLookup = {
     west = vec(0.25, 0.25, 0)
 }
 
--- USER DEFINED PAT FUNCTION FOR HEADS.
+-- Runs when your skulls are pet. Modify to customise how your skulls are pet!
 ---@param senderId string The unique ID of the sender.
 ---@param pos Vector3 The position of the head.
 function config.onPatSkull(senderId, pos)
@@ -124,7 +124,7 @@ function config.onPatSkull(senderId, pos)
     end
 end
 
--- USER DEFINED PAT FUNCTION FOR ENTITYS IN THE WORLD.
+-- Runs when  you pet entities. Modify to customise how you pet entities!
 ---@param entity Entity
 function config.onEntityPat(entity)
     local heartSpread = 0.5
@@ -315,7 +315,21 @@ local function doPat(target)
         end
         safePcall(function()
             local targetVars = world.avatarVars()[target]
-            local wasSuccessful = targetVars.patpat.player(senderId)
+
+            local isNewPat = (targetVars.patpat and targetVars.patpat.player)
+            local isOldPat = targetVars.petpet
+            
+            local wasSuccessful = false
+            if isNewPat then
+                wasSuccessful = targetVars.patpat.player(senderId)
+            elseif isOldPat and not targetVars["patpat.noPats"] then
+                targetVars.petpet(senderId, 6)
+                if not targetVars["patpat.noHearts"] then
+                    config.onEntityPat(world.getEntity(target))
+                end
+                wasSuccessful = true
+            end
+
             if wasSuccessful then
                 host:swingArm()
                 isPatting = target
@@ -326,7 +340,21 @@ local function doPat(target)
         local ownerId = getHeadOwner(targetBlock)
         safePcall(function()
             local targetVars = world.avatarVars()[ownerId]
-            local wasSuccessful = targetVars.patpat.skull(senderId, target.x, target.y, target.z)
+
+            local isNewPat = (targetVars.patpat and targetVars.patpat.player)
+            local isOldPat = targetVars["petpet.playerHead"]
+
+            local wasSuccessful = false
+            if isNewPat then
+                wasSuccessful = targetVars.patpat.skull(senderId, target.x, target.y, target.z)
+            elseif isOldPat and not targetVars["patpat.noPats"] then
+                targetVars["petpet.playerHead"](senderId, 6, target.x, target.y, target.z)
+                if not targetVars["patpat.noHearts"] then
+                    local posOffset = vec((math.random() - 0.5) * 0.5, (math.random() - 0.5) * 0.5, (math.random() - 0.5) * 0.5)
+                    particles:newParticle("minecraft:heart", target + vec(0.5, 0.5, 0.5) + posOffset)
+                end
+                wasSuccessful = true
+            end
             if wasSuccessful then
                 host:swingArm()
                 isPatting = target
@@ -574,14 +602,18 @@ function events.mouse_press(button, state, modifiers)
             end
             return safePcall(function()
                 local targetVars = world.avatarVars()[targetId]
-                if not targetVars.patpat.skull then error() end
+                local isNewPat = (targetVars.patpat and targetVars.patpat.player)
+                local isOldPat = targetVars.petpet
+                if not (isNewPat or isOldPat) then error() end
                 pings.patpat(targetId)
             end)
         elseif targetBlock and (targetBlock.id == "minecraft:player_head" or targetBlock.id == "minecraft:player_wall_head") then
             local ownerId = getHeadOwner(targetBlock)
             return safePcall(function()
                 local targetVars = world.avatarVars()[ownerId]
-                if not targetVars.patpat.skull then error() end
+                local isNewPat = (targetVars.patpat and targetVars.patpat.player)
+                local isOldPat = targetVars["petpet.playerHead"]
+                if not (isNewPat or isOldPat) then error() end
                 pings.patpat(targetBlock:getPos())
             end)
         end
