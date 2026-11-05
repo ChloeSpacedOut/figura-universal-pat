@@ -442,8 +442,13 @@ local function isPatAllowed(senderId, skullPos)
         end
     end
 
+    ---@type Player
+    ---@diagnostic disable-next-line: assign-type-mismatch
     local pattingPlayer = world.getEntity(senderId)
     if not pattingPlayer then return false end
+    if not type(pattingPlayer) == "PlayerAPI" then return false end
+    if pattingPlayer:getHeldItem().id ~= "minecraft:air" then return false end
+
     local pattingPlayerPos = pattingPlayer:getPos()
 
     if skull then
@@ -591,6 +596,9 @@ function events.mouse_press(button, state, modifiers)
     local isSelfPatModKey = validateAllModifiers(modifiers, config.selfPatControls)
     local isMouseButton = config.patControls.mouseButtons[enums.mouseButtons[button]]
     local isMouseState = state == 1
+
+    if player:getHeldItem().id ~= "minecraft:air" then return false end
+
     if isMouseState and isModKey and isMouseButton then
         local targetEntity = player:getTargetedEntity(5)
         local targetBlock = player:getTargetedBlock(true, 5)
