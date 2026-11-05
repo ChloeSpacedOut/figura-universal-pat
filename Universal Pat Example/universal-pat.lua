@@ -10,7 +10,7 @@ local config = {
     -- If patting non-living entites is enabled.
     patNonLivingEntites = false,
 
-    -- Whitelisted players will be allowed to pat you if you set doWhitelist to true.
+    -- Only whitelisted players will be allowed to pat you if you set doWhitelist to true.
     doWhitelist = false,
     doWhitelistOnSkull = false,
     whitelist = {
@@ -44,7 +44,7 @@ local config = {
             patOnMouse8 = false,
         },
 
-        -- Which additional keys must be pressed to pat.
+        -- Which additional keys must be pressed to pat. Will be impossible to pat if all are false.
         additionalKeys = {
             patOnShift = true,
             patOnCtrl = false,
@@ -61,7 +61,7 @@ local config = {
 
     -- Config for self pat, useful in debugging your own pat function.
     selfPatControls = {
-        -- Which additional keys must be pressed to self pat.
+        -- Which additional keys must be pressed to self pat. Will be impossible to self pat if all are false.
         additionalKeys = {
             patOnShift = false,
             patOnCtrl = true,
@@ -78,39 +78,65 @@ local config = {
 -- USER DEFINED PAT FUNCTION.
 ---@param senderId string The unique ID of the sender.
 function config.onPat(senderId)
-    
     local heartSpread = 0.5
+    local particleScale = 1
     local particle = "minecraft:heart"
 
     local pos = player:getPos()
     local randomHeartOffset = vec((math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread)
-    particles:newParticle(particle, pos + vec(0, player:getEyeHeight(), 0) + randomHeartOffset)
+    local petParticle = particles:newParticle(particle, pos + vec(0, player:getEyeHeight(), 0) + randomHeartOffset)
+    petParticle:scale(particleScale)
 end
+
+-- Lookup table for skup patting, feel free to remove if you don't use this.
+local wallHeadLookup = {
+    north = vec(0, 0.25, 0.25),
+    east = vec(-0.25, 0.25, 0),
+    south = vec(0, 0.25, -0.25),
+    west = vec(0.25, 0.25, 0)
+}
 
 -- USER DEFINED PAT FUNCTION FOR HEADS.
 ---@param senderId string The unique ID of the sender.
 ---@param pos Vector3 The position of the head.
 function config.onPatSkull(senderId, pos)
+    local posOffset = vec(0,0,0)
+    local block = world.getBlockState(pos)
+    if block and block.id and block.id == "minecraft:player_wall_head"then
+        local properties = block:getProperties()
+        if properties and properties.facing then
+            posOffset = wallHeadLookup[properties.facing]
+        end
+    end
 
     local heartSpread = 0.4
+    local particleScale = 1
     local particle = "minecraft:heart"
+    local playNoteBlockSound = true
 
     local randomHeartOffset = vec((math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread)
-    particles:newParticle(particle, pos + vec(0.5, 0.5, 0.5) + randomHeartOffset)
+    local petParticle = particles:newParticle(particle, pos + vec(0.5, 0.5, 0.5) + randomHeartOffset + posOffset)
+    petParticle:scale(particleScale)
+
+    local entityData = block:getEntityData()
+    if playNoteBlockSound and entityData and entityData["note_block_sound"] then
+        sounds:playSound(entityData["note_block_sound"], pos, .5)
+    end
 end
 
 -- USER DEFINED PAT FUNCTION FOR ENTITYS IN THE WORLD.
 ---@param entity Entity
 function config.onEntityPat(entity)
-
     local heartSpread = 0.5
+    local particleScale = 1
     local particle = "minecraft:heart"
     local playEntitySounds = true
 
     local pos = entity:getPos()
     local randomHeartOffset = vec((math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread, (math.random() - 0.5) * heartSpread)
-    particles:newParticle(particle, pos + vec(0, entity:getEyeHeight(), 0) + randomHeartOffset)
-    
+    local petParticle = particles:newParticle(particle, pos + vec(0, entity:getEyeHeight(), 0) + randomHeartOffset)
+    petParticle:scale(particleScale)
+
     if playEntitySounds then
         local entityName = string.lower(entity:getName()):gsub(" ", "_")
         local variant = entity:getNbt().sound_variant
@@ -184,6 +210,17 @@ local function safePcall(func, override)
     return hasErrored
 end
 
+---Gets the UUID of this head's owner.
+---@param blockstate BlockState
+---@return string?
+local function getHeadOwner(blockstate)
+    local blockData = blockstate:getEntityData()
+    if not blockData then return end
+    if not blockData.SkullOwner then return end
+    if not blockData.SkullOwner.Id then return end
+    return client.intUUIDToString(table.unpack(blockData.SkullOwner.Id))
+end
+
 local isPatting = nil
 local punchingPlayers = {}
 
@@ -241,20 +278,32 @@ end
 
 --#ENDREGION
 
+--#REGION Is Rate Limted
+
+---Checks if a pat should be rate limited.
+---@return boolean
+local function isRateLimted()
+    local mostRecentPat = patQueue[#patQueue]
+    local worldTime = world.getTime()
+
+    if mostRecentPat and mostRecentPat.queueTime then
+        if worldTime < mostRecentPat.queueTime + 2 then
+            return true
+        end
+    end
+    return false
+end
+
+--#ENDREGION
+
 --#REGION DoPat
 
 ---Attempt a pat.
 ---@param target string | Vector3 The target being pet. Either an entity UUID or a block position.
 local function doPat(target)
     local target = target
-    local worldTime = world.getTime()
-    local mostRecentPat = patQueue[#patQueue]
 
-    if mostRecentPat and mostRecentPat.queueTime then
-        if worldTime < mostRecentPat.queueTime + 2 then
-            return
-        end
-    end
+    if isRateLimted() then return end
 
     local senderId = avatar:getUUID()
     if type(target) == "string" then
@@ -264,11 +313,8 @@ local function doPat(target)
             host:swingArm()
             isPatting = target
         end
-        local targetVars = world.avatarVars()[target]
-        if not targetVars then return end
-        if not targetVars.patpat then return end
-        if not targetVars.patpat.player then return end
         safePcall(function()
+            local targetVars = world.avatarVars()[target]
             local wasSuccessful = targetVars.patpat.player(senderId)
             if wasSuccessful then
                 host:swingArm()
@@ -277,16 +323,9 @@ local function doPat(target)
         end)
     elseif type(target) == "Vector3" then
         local targetBlock = world.getBlockState(target)
-        local blockData = targetBlock:getEntityData()
-        if not blockData then return end
-        if not blockData.SkullOwner then return end
-        if not blockData.SkullOwner.Id then return end
-        local ownerId = client.intUUIDToString(table.unpack(blockData.SkullOwner.Id))
-        local targetVars = world.avatarVars()[ownerId]
-        if not targetVars then return end
-        if not targetVars.patpat then return end
-        if not targetVars.patpat.skull then return end
+        local ownerId = getHeadOwner(targetBlock)
         safePcall(function()
+            local targetVars = world.avatarVars()[ownerId]
             local wasSuccessful = targetVars.patpat.skull(senderId, target.x, target.y, target.z)
             if wasSuccessful then
                 host:swingArm()
@@ -300,8 +339,7 @@ end
 
 --#REGION Tick
 
----@diagnostic disable-next-line: duplicate-set-field
-function events.tick()
+local function tick()
     for _, targetPlayer in pairs(world:getPlayers()) do
         local playerId = targetPlayer:getUUID()
         if targetPlayer:getSwingTime() == 1 then
@@ -319,7 +357,7 @@ function events.tick()
         pat:check()
     end
 
-    if world.getTime() % config.patDelay == 0 then
+    if player:isLoaded() and world.getTime() % config.patDelay == 0 then
         local targetedEntity = player:getTargetedEntity()
         local targetedBlock = player:getTargetedBlock(false, 5)
         local isTargetingPetPlayer = targetedEntity and targetedEntity:getUUID() == isPatting
@@ -330,26 +368,35 @@ function events.tick()
     end
 end
 
+function events.tick()
+    tick()
+end
+
+local lastDelta = 0
+function events.skull_render(delta)
+    if lastDelta == delta then return end
+    if lastDelta > delta and (not player:isLoaded()) then
+        tick()
+    end
+    lastDelta = delta
+end
+
 --#ENDREGION
 
---#REGION Pat Validator
+--#REGION Is Pat Allowed
 
 ---Validates if a pat is from the intended sender.
 ---@param senderId string The unique ID of the sender.
 ---@param skullPos Vector3? The position of the skull if it exists.
 ---@return boolean isValidPat If this pat was valid.
-local function patValidator(senderId, skullPos)
+local function isPatAllowed(senderId, skullPos)
     if config.blacklist[senderId] then return false end
 
     local skull
     if skullPos then
         skull = world.getBlockState(skullPos)
         if not skull then return false end
-        local blockData = skull:getEntityData()
-        if not blockData then return false end
-        if not blockData.SkullOwner then return false end
-        if not blockData.SkullOwner.Id then return false end
-        local ownerId = client.intUUIDToString(table.unpack(blockData.SkullOwner.Id))
+        local ownerId = getHeadOwner(skull)
         if not ownerId == avatar:getUUID() then return false end
     end
 
@@ -379,11 +426,7 @@ local function patValidator(senderId, skullPos)
 
         local pattingPlayerTargetBlock = pattingPlayer:getTargetedBlock(false, 5)
         if not pattingPlayerTargetBlock then return false end
-        local blockData = pattingPlayerTargetBlock:getEntityData()
-        if not blockData then return false end
-        if not blockData.SkullOwner then return false end
-        if not blockData.SkullOwner.Id then return false end
-        local ownerId = client.intUUIDToString(table.unpack(blockData.SkullOwner.Id))
+        local ownerId = getHeadOwner(pattingPlayerTargetBlock)
         if not ownerId == avatar:getUUID() then return false end
     elseif player:isLoaded() then
         if config.doWhitelist and (not config.whitelist[senderId]) then return false end
@@ -393,7 +436,7 @@ local function patValidator(senderId, skullPos)
 
         local pattingPlayerTargetEntity = pattingPlayer:getTargetedEntity(5)
         if not pattingPlayerTargetEntity then return false end
-        if not pattingPlayerTargetEntity:getUUID() == avatar:getUUID() then return false end
+        if pattingPlayerTargetEntity:getUUID() ~= avatar:getUUID() then return false end
     else
         return false
     end
@@ -405,24 +448,20 @@ end
 
 --#REGION Pings
 
----@diagnostic disable-next-line: duplicate-set-field
 function pings.patpat(targetId)
     doPat(targetId)
 end
 
----@diagnostic disable-next-line: duplicate-set-field
 function pings.patHead(pos)
     doPat(pos)
 end
 
----@diagnostic disable-next-line: duplicate-set-field
 function pings.selfPat()
     local uuid = avatar:getUUID()
     config.onPat(uuid)
     host:swingArm()
 end
 
----@diagnostic disable-next-line: duplicate-set-field
 function pings.unpat()
     isPatting = false
 end
@@ -433,14 +472,26 @@ end
 
 --#REGION Pat Functions
 
+---Checks the caller of the current function if possible.
+---@return string?
+local function checkCallerUUID()
+    if silly and silly.backports and silly.backports.getCaller then
+        return silly.backports:getCaller()
+    end
+end
+
 local patpat = {}
 
 ---Try to pat a player.
 ---@param senderId string The unique ID of the sender.
 ---@return boolean wasSuccessful If this pat was successful.
 function patpat.player(senderId)
-    local isAllowed = patValidator(senderId)
-    if not isAllowed then return false end
+    if isRateLimted() then return false end
+    local callerUUID = checkCallerUUID()
+    if callerUUID and world.getEntity(callerUUID) then
+        senderId = callerUUID
+    end
+    if not isPatAllowed(senderId) then return false end
     pat:new(senderId)
     return true
 end
@@ -452,9 +503,13 @@ end
 ---@param z number Z position of the player head.
 ---@return boolean wasSuccessful If this pat was successful.
 function patpat.skull(senderId, x, y, z)
+    if isRateLimted() then return false end
+    local callerUUID = checkCallerUUID()
+    if callerUUID and world.getEntity(callerUUID) then
+        senderId = callerUUID
+    end
     local pos = vec(x, y ,z)
-    local isAllowed = patValidator(senderId, pos)
-    if not isAllowed then return false end
+    if not isPatAllowed(senderId, pos) then return false end
     pat:new(senderId, pos)
     return true
 end
@@ -503,7 +558,6 @@ local function validateAllModifiers(modifiers, keyConfig)
 end
 
 
----@diagnostic disable-next-line: duplicate-set-field
 function events.mouse_press(button, state, modifiers)
     local isModKey = validateAllModifiers(modifiers, config.patControls) or (not config.patControls.requiredAdditionalKeys)
     local isSelfPatModKey = validateAllModifiers(modifiers, config.selfPatControls)
@@ -518,24 +572,18 @@ function events.mouse_press(button, state, modifiers)
                 pings.patpat(targetId)
                 return true
             end
-            local targetVars = world.avatarVars()[targetId]
-            if not targetVars then return end
-            if not targetVars.patpat then return end
-            if not targetVars.patpat.player then return end
-            pings.patpat(targetId)
-            return true
-        elseif targetBlock and targetBlock.id == "minecraft:player_head" then
-            local blockData = targetBlock:getEntityData()
-            if not blockData then return end
-            if not blockData.SkullOwner then return end
-            if not blockData.SkullOwner.Id then return end
-            local ownerId = client.intUUIDToString(table.unpack(blockData.SkullOwner.Id))
-            local targetVars = world.avatarVars()[ownerId]
-            if not targetVars then return end
-            if not targetVars.patpat then return end
-            if not targetVars.patpat.skull then return end
-            pings.patpat(targetBlock:getPos())
-            return true
+            return safePcall(function()
+                local targetVars = world.avatarVars()[targetId]
+                if not targetVars.patpat.skull then error() end
+                pings.patpat(targetId)
+            end)
+        elseif targetBlock and (targetBlock.id == "minecraft:player_head" or targetBlock.id == "minecraft:player_wall_head") then
+            local ownerId = getHeadOwner(targetBlock)
+            return safePcall(function()
+                local targetVars = world.avatarVars()[ownerId]
+                if not targetVars.patpat.skull then error() end
+                pings.patpat(targetBlock:getPos())
+            end)
         end
     elseif isSelfPatModKey and isMouseButton and isMouseState then
         pings.selfPat()
