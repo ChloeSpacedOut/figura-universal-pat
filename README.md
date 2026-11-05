@@ -40,4 +40,5 @@ These checks do not guarantee that your whitelist / blacklist will not be cracke
 - a whitelisted player to be looking at you
 - a whitelisted player to not be holding an item
 - a whitelisted player to have punched you within the last 4 ticks.
+
 This is very unlikely to be abused, and if it is, you can just blacklist pats when this bad actor is around.
