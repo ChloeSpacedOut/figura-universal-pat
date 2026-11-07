@@ -596,6 +596,9 @@ end
 
 
 function events.mouse_press(button, state, modifiers)
+
+    if not player:isLoaded() then return end
+
     local isModKey = validateAllModifiers(modifiers, config.patControls) or (not config.patControls.requiredAdditionalKeys)
     local isSelfPatModKey = validateAllModifiers(modifiers, config.selfPatControls)
     local isMouseButton = config.patControls.mouseButtons[enums.mouseButtons[button]]
