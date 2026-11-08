@@ -256,7 +256,7 @@ end
 
 ---Checks if this pat should be activated or removed.
 function pat:check()
-    if punchingPlayers[self.senderId] then
+    if player:isLoaded() and punchingPlayers[self.senderId] then
         punchingPlayers[self.senderId] = nil
         if self.pos then
             config.onPatSkull(self.senderId, self.pos)
