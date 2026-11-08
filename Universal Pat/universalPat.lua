@@ -138,7 +138,8 @@ function config.onEntityPat(entity)
     petParticle:scale(particleScale)
 
     if playEntitySounds then
-        local entityName = string.lower(entity:getName()):gsub(" ", "_")
+        local entityName = string.match(entity:getType(), ":(.*)")
+        entityName = string.lower(entityName):gsub(" ", "_")
         local variant = entity:getNbt().sound_variant
         local pitch = entity:getNbt().Age == -1 and 1.5 or 1
         if variant and variant ~= "minecraft:classic" then
@@ -601,6 +602,7 @@ end
 function events.mouse_press(button, state, modifiers)
     
     if not host:isHost() then return end
+    if host:getScreen() then return end
     if not player:isLoaded() then return end
 
     local isModKey = validateAllModifiers(modifiers, config.patControls) or (not config.patControls.requiredAdditionalKeys)
