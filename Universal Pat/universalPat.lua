@@ -487,14 +487,17 @@ end
 --#REGION Pings
 
 function pings.patpat(targetId)
+    if not player:isLoaded() then return end
     doPat(targetId)
 end
 
 function pings.patHead(pos)
+    if not player:isLoaded() then return end
     doPat(pos)
 end
 
 function pings.selfPat()
+    if not player:isLoaded() then return end
     local uuid = avatar:getUUID()
     config.onPat(uuid)
     host:swingArm()
