@@ -308,6 +308,7 @@ local function doPat(target)
     local senderId = avatar:getUUID()
     if type(target) == "string" then
         local entity = world.getEntity(target)
+        if not entity then return end
         if not entity:isPlayer() then
             config.onEntityPat(entity)
             host:swingArm()
