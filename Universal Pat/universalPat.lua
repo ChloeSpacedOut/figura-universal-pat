@@ -1,4 +1,4 @@
--- Universal Pat 1.0 by ChloeSpacedOut
+-- Universal Pat 1.1 by ChloeSpacedOut
 
 --#REGION Config
 
@@ -594,17 +594,22 @@ local function validateAllModifiers(modifiers, keyConfig)
     end
 end
 
-
 function events.mouse_press(button, state, modifiers)
-
+    
     if not player:isLoaded() then return end
 
     local isModKey = validateAllModifiers(modifiers, config.patControls) or (not config.patControls.requiredAdditionalKeys)
     local isSelfPatModKey = validateAllModifiers(modifiers, config.selfPatControls)
+    
     local isMouseButton = config.patControls.mouseButtons[enums.mouseButtons[button]]
     local isMouseState = state == 1
 
     if player:getHeldItem().id ~= "minecraft:air" then return false end
+
+    if isSelfPatModKey and isMouseButton and isMouseState then
+        pings.selfPat()
+        return true
+    end
 
     if isMouseState and isModKey and isMouseButton then
         local targetEntity = player:getTargetedEntity(5)
@@ -632,11 +637,12 @@ function events.mouse_press(button, state, modifiers)
                 pings.patpat(targetBlock:getPos())
             end)
         end
-    elseif isSelfPatModKey and isMouseButton and isMouseState then
-        pings.selfPat()
-    elseif (not isMouseState) and isMouseButton then
+    end
+
+    if (not isMouseState) and isMouseButton then
         if isPatting then
             pings.unpat()
+            return false
         end
     end
 end
