@@ -596,6 +596,7 @@ end
 
 function events.mouse_press(button, state, modifiers)
     
+    if not host:isHost() then return end
     if not player:isLoaded() then return end
 
     local isModKey = validateAllModifiers(modifiers, config.patControls) or (not config.patControls.requiredAdditionalKeys)
