@@ -25,7 +25,8 @@ Universal pat should be compatible with most pat scripts, and is compatible with
 - ComPatPat
 - FoxPat (legacy)
 - Patpat by Auria (legacy)
-- LazyPat (legacy)
+- LazyPat (legacy) (one-way support)
+- SPatpat by Slyme (legacy) (one-way support)
 
 # Security
 Universal pat does not use uncrackable UUID auth, and instead relies on context to verify if a pat is valid. Before accepting a pat from others, universal pat checks:
