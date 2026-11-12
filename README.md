@@ -21,11 +21,12 @@ Universal pat should be compatible with most pat scripts, and is compatible with
 ## Compatible Pat Scripts
 - Auria Pat
 - FOX's Patpat
+- Pat³
+- ComPatPat
 - FoxPat (legacy)
 - Patpat by Auria (legacy)
 - LazyPat (legacy)
-## Incompatible Pat Scripts
-- Pat³ - Uses advanced UUID auth that is incompatible with the pat standard.
+
 # Security
 Universal pat does not use uncrackable UUID auth, and instead relies on context to verify if a pat is valid. Before accepting a pat from others, universal pat checks:
 - that this player is the caller of the pat function (if the client has silly plugin installed)
