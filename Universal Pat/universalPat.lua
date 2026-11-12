@@ -327,8 +327,7 @@ local function doPat(target)
             local targetVars = world.avatarVars()[target]
 
             local isNewPat = (targetVars.patpat and targetVars.patpat.player)
-            local isOldPat = targetVars.petpet or targetVars["patpat.yesPats"]
-            
+            local isOldPat = targetVars.petpet or targetVars["patpat.yesPats"] or (targetVars.patpat and targetVars.patpat.yesPats)
             local wasSuccessful = false
             if isNewPat then
                 wasSuccessful = targetVars.patpat.player(senderId)
@@ -361,8 +360,8 @@ local function doPat(target)
         safePcall(function()
             local targetVars = world.avatarVars()[ownerId]
 
-            local isNewPat = (targetVars.patpat and targetVars.patpat.player)
-            local isOldPat = targetVars["petpet.playerHead"] or targetVars["patpat.yesPats"]
+            local isNewPat = (targetVars.patpat and targetVars.patpat.skull)
+            local isOldPat = targetVars["petpet.playerHead"] or targetVars["patpat.yesPats"] or (targetVars.patpat and targetVars.patpat.yesPats)
 
             local wasSuccessful = false
             if isNewPat then
@@ -648,7 +647,7 @@ function events.mouse_press(button, state, modifiers)
             return safePcall(function()
                 local targetVars = world.avatarVars()[targetId]
                 local isNewPat = (targetVars.patpat and targetVars.patpat.player)
-                local isOldPat = targetVars.petpet or targetVars["patpat.yesPats"]
+                local isOldPat = targetVars.petpet or targetVars["patpat.yesPats"] or (targetVars.patpat and targetVars.patpat.yesPats)
                 if not (isNewPat or isOldPat) then error() end
                 pings.patpat(targetId)
             end)
@@ -656,8 +655,8 @@ function events.mouse_press(button, state, modifiers)
             local ownerId = getHeadOwner(targetBlock)
             return safePcall(function()
                 local targetVars = world.avatarVars()[ownerId]
-                local isNewPat = (targetVars.patpat and targetVars.patpat.player)
-                local isOldPat = targetVars["petpet.playerHead"] or targetVars["patpat.yesPats"]
+                local isNewPat = (targetVars.patpat and targetVars.patpat.skull)
+                local isOldPat = targetVars["petpet.playerHead"] or targetVars["patpat.yesPats"] or (targetVars.patpat and targetVars.patpat.yesPats)
                 if not (isNewPat or isOldPat) then error() end
                 pings.patpat(targetBlock:getPos())
             end)
