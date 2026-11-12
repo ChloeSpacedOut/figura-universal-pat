@@ -25,6 +25,7 @@ Universal pat should be compatible with most pat scripts, and is compatible with
 - ComPatPat
 - FoxPat (legacy)
 - Patpat by Auria (legacy)
+- BunnyPat (legacy)
 - LazyPat (legacy) (one-way support)
 - Patpat by Slyme (legacy) (one-way support)
 
