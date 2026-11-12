@@ -277,8 +277,6 @@ end
 ---Removes this pat.
 function pat:remove()
     patQueue[self.id] = nil
-    patpat.target = nil
-    avatar:store("patpat", patpat)
 end
 
 --#ENDREGION
@@ -313,16 +311,18 @@ local function doPat(target)
     local senderId = avatar:getUUID()
     if type(target) == "string" then
 
+        local entity = world.getEntity(target)
+        if not entity then return end
+
         patpat.target = target
         avatar:store("patpat", patpat)
 
-        local entity = world.getEntity(target)
-        if not entity then return end
         if not entity:isPlayer() then
             config.onEntityPat(entity)
             host:swingArm()
             isPatting = target
         end
+
         safePcall(function()
             local targetVars = world.avatarVars()[target]
 
@@ -347,6 +347,10 @@ local function doPat(target)
                 isPatting = target
             end
         end)
+
+        patpat.target = nil
+        avatar:store("patpat", patpat)
+
     elseif type(target) == "Vector3" then
         local targetBlock = world.getBlockState(target)
         local ownerId = getHeadOwner(targetBlock)
@@ -373,11 +377,15 @@ local function doPat(target)
                 end
                 wasSuccessful = true
             end
+            
             if wasSuccessful then
                 host:swingArm()
                 isPatting = target
             end
         end)
+
+        patpat.target = nil
+        avatar:store("patpat", patpat)
     end
 end
 
