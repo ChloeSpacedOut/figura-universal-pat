@@ -1,4 +1,4 @@
--- Universal Pat 1.1 by ChloeSpacedOut
+-- Universal Pat 1.2 by ChloeSpacedOut
 
 local patpat = {}
 
