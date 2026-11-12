@@ -1,5 +1,7 @@
 -- Universal Pat 1.1 by ChloeSpacedOut
 
+local patpat = {}
+
 --#REGION Config
 
 local config = {
@@ -275,6 +277,8 @@ end
 ---Removes this pat.
 function pat:remove()
     patQueue[self.id] = nil
+    patpat.target = nil
+    avatar:store("patpat", patpat)
 end
 
 --#ENDREGION
@@ -308,6 +312,10 @@ local function doPat(target)
 
     local senderId = avatar:getUUID()
     if type(target) == "string" then
+
+        patpat.target = target
+        avatar:store("patpat", patpat)
+
         local entity = world.getEntity(target)
         if not entity then return end
         if not entity:isPlayer() then
@@ -342,6 +350,10 @@ local function doPat(target)
     elseif type(target) == "Vector3" then
         local targetBlock = world.getBlockState(target)
         local ownerId = getHeadOwner(targetBlock)
+
+        patpat.target = ownerId
+        avatar:store("patpat", patpat)
+
         safePcall(function()
             local targetVars = world.avatarVars()[ownerId]
 
@@ -521,8 +533,6 @@ local function checkCallerUUID()
         return silly.backports:getCaller()
     end
 end
-
-local patpat = {}
 
 ---Try to pat a player.
 ---@param senderId string The unique ID of the sender.
