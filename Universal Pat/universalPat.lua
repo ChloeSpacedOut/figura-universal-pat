@@ -1,4 +1,4 @@
--- Universal Pat 1.2 by ChloeSpacedOut
+-- Universal Pat 1.3 by ChloeSpacedOut
 
 local patpat = {}
 
@@ -195,22 +195,26 @@ end
 --#REGION Pat Handler
 
 ---Safely pcall a function. Discovered by Bitslayn.
----@param func function The function to be safe pcalled.
----@param override boolean? If this pcall should be ignored. For debugging.
----@return boolean hasErrored If the function errored in the pcall.
-local function safePcall(func, override)
-    if override then
-        func()
-        return true
-    end
-    local v = vec(1, 2)
-    local hasErrored = pcall(v.applyFunc, v, function(i)
-        if i == 1 then
-            func()
-        end
-        return i
+---@param func function
+---@param ... any
+---@return boolean success
+---@return any result
+---@return any ...
+local function safePcall(func, ...)
+    local var = { ... }
+    local out
+
+    local vec = vectors.vec2()
+    local ok, result = pcall(vec.applyFunc, vec, function(_, i)
+        ---@diagnostic disable-next-line: missing-return-value, missing-return
+        if i > 1 then return end; out = { func(table.unpack(var)) }
     end)
-    return hasErrored
+
+    if ok then
+        return ok, table.unpack(out)
+    else
+        return ok, result
+    end
 end
 
 ---Gets the UUID of this head's owner.
@@ -323,7 +327,7 @@ local function doPat(target)
             isPatting = target
         end
 
-        safePcall(function()
+        local ok, result = safePcall(function()
             local targetVars = world.avatarVars()[target]
 
             local isNewPat = (targetVars.patpat and targetVars.patpat.player)
@@ -346,6 +350,14 @@ local function doPat(target)
                 isPatting = target
             end
         end)
+        if not ok then
+            isPatting = false
+            local viewer = client:getViewer()
+            local isRelevantToError = host:isHost() or (viewer and viewer:getUUID() == target)
+            if type(result) == "string" and isRelevantToError then
+                log("§c" .. result)
+            end
+        end
 
         patpat.target = nil
         avatar:store("patpat", patpat)
@@ -357,7 +369,7 @@ local function doPat(target)
         patpat.target = ownerId
         avatar:store("patpat", patpat)
 
-        safePcall(function()
+        local ok, result = safePcall(function()
             local targetVars = world.avatarVars()[ownerId]
 
             local isNewPat = (targetVars.patpat and targetVars.patpat.skull)
@@ -382,6 +394,15 @@ local function doPat(target)
                 isPatting = target
             end
         end)
+
+        if not ok then
+            isPatting = false
+            local viewer = client:getViewer()
+            local isRelevantToError = host:isHost() or (viewer and viewer:getUUID() == target)
+            if type(result) == "string" and isRelevantToError then
+                log("§c" .. result)
+            end
+        end
 
         patpat.target = nil
         avatar:store("patpat", patpat)
@@ -644,25 +665,26 @@ function events.mouse_press(button, state, modifiers)
                 pings.patpat(targetId)
                 return true
             end
-            return safePcall(function()
+            local ok = safePcall(function()
                 local targetVars = world.avatarVars()[targetId]
                 local isNewPat = (targetVars.patpat and targetVars.patpat.player)
                 local isOldPat = targetVars.petpet or targetVars["patpat.yesPats"] or (targetVars.patpat and targetVars.patpat.yesPats)
                 if not (isNewPat or isOldPat) then error() end
                 pings.patpat(targetId)
             end)
+            return ok
         elseif targetBlock and (targetBlock.id == "minecraft:player_head" or targetBlock.id == "minecraft:player_wall_head") then
             local ownerId = getHeadOwner(targetBlock)
-            return safePcall(function()
+            local ok = safePcall(function()
                 local targetVars = world.avatarVars()[ownerId]
                 local isNewPat = (targetVars.patpat and targetVars.patpat.skull)
                 local isOldPat = targetVars["petpet.playerHead"] or targetVars["patpat.yesPats"] or (targetVars.patpat and targetVars.patpat.yesPats)
                 if not (isNewPat or isOldPat) then error() end
                 pings.patpat(targetBlock:getPos())
             end)
+            return ok
         end
     end
-
     if (not isMouseState) and isMouseButton then
         if isPatting then
             pings.unpat()
